@@ -2,6 +2,8 @@ import streamlit as st
 from groq import Groq
 from tavily import TavilyClient
 import pypdf
+from gtts import gTTS
+import io
 
 st.set_page_config(page_title="Faruk AI", page_icon="🤖", layout="wide")
 st.title("🤖 Faruk AI")
@@ -29,10 +31,21 @@ if "messages" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Faruk AI Ayarları")
     
+    # 4. Özellik: Hazır Rol / Mod Seçici (Dropdown)
+    st.subheader("🎨 Mod ve Kişilik Seçimi")
+    preset_modes = {
+        "🤖 Genel Asistan": "Senin adın Faruk AI. Kullanıcılara her konuda yardımcı olan, samimi, zeki ve geniş bir genel kültüre sahip bir yapay zeka asistanısın. Sorulara detaylı ve Türkçe cevap ver.",
+        "👨‍🏫 Ödev / Ders Öğretmeni": "Sen sabırlı ve öğretici bir lise öğretmenisin. Sorulan soruları adım adım, açık ve öğrencilerin kolayca anlayacağı şekilde çöz ve örnekler ver.",
+        "💻 Yazılımcı / Kod Koçu": "Sen uzman bir yazılım mühendisisin. Kullanıcının kodlama sorularına temiz, optimize edilmiş ve açıklamalı kod blokları üreterek cevap ver.",
+        "📝 Kısa Özetçi": "Sen profesyonel bir metin özetleyicisin. Sana verilen metinleri veya soruları doğrudan en önemli 3-5 madde halinde kısa ve öz şekilde özetle."
+    }
+    
+    selected_mode = st.selectbox("Hazır Mod Seçin:", list(preset_modes.keys()))
+    
     system_prompt = st.text_area(
         "Sistem Talimatı (Kişilik)",
-        value="Senin adın Faruk AI. Kullanıcılara her konuda yardımcı olan, samimi, zeki ve geniş bir genel kültüre sahip bir yapay zeka asistanısın. Sorulara detaylı ve Türkçe cevap ver.",
-        help="Faruk AI'nın rolünü buradan değiştirebilirsiniz."
+        value=preset_modes[selected_mode],
+        help="Söz konusu modun talimatlarını buradan inceleyebilir veya düzenleyebilirsiniz."
     )
     
     temperature = st.slider(
@@ -44,7 +57,7 @@ with st.sidebar:
         help="Düşük değerler kesin, yüksek değerler yaratıcı yanıtlar verir."
     )
     
-    enable_web_search = st.toggle("🌐 Web Arama Modu (Tavily AI)", value=False, help="Güncel haberler ve maç sonuçları için internette canlı arama yapar.")
+    enable_web_search = st.toggle("🌐 Web Arama Modu (Tavily AI)", value=False, help="Güncel haberler ve maç sonuçları için internette canlı arama yapmayı sağlar.")
     
     st.divider()
     
@@ -98,10 +111,32 @@ if not st.session_state.messages:
     if col3.button("⚽ Güncel Maç Sonuçları", use_container_width=True):
         st.session_state.prompt_input = "Son oynanan Fenerbahçe maçının sonucunu ve özetini söyle."
 
-# Geçmiş mesajları ekrana yazdır
-for message in st.session_state.messages:
+# --- GEÇMİŞ MESAJLARI VE SESLİ YANIT / KOPYALAMA BİLEŞENLERİ ---
+for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+        
+        # 1. & 2. Özellik: Asistan yanıtları için Sesli Okuma ve Tek Tık Kopyalama Kutusu
+        if message["role"] == "assistant":
+            col_audio, col_copy = st.columns([2, 3])
+            
+            # Sesli Dinleme Butonu
+            with col_audio:
+                if st.button("🔊 Sesli Dinle", key=f"tts_{idx}"):
+                    try:
+                        clean_text = message["content"].replace("*", "").replace("#", "").replace("`", "")
+                        tts = gTTS(text=clean_text[:500], lang='tr') # İlk 500 karakter seslendirilir
+                        fp = io.BytesIO()
+                        tts.write_to_fp(fp)
+                        fp.seek(0)
+                        st.audio(fp, format="audio/mp3")
+                    except Exception as audio_err:
+                        st.caption("⚠️ Ses oluşturulamadı.")
+            
+            # Tek Tık Kopyalama Kutusu
+            with col_copy:
+                with st.popover("📋 Metni Kopyala"):
+                    st.code(message["content"], language=None)
 
 # Kullanıcı girdisi alma
 prompt = st.chat_input("Faruk AI'ya bir şey sorun...")
@@ -144,8 +179,11 @@ if prompt:
                 if search_results:
                     extra_info += f"\n\n[DİKKAT: AŞAĞIDAKİ BİLGİLER TAVILY İLE İNTERNETTEN CANLI ÇEKİLMİŞ EN GÜNCEL VERİLERDİR. KENDİ ESKİ BİLGİLERİN YERİNE SADECE BURADAKİ BİLGİLERİ BAZ ALARAK CEVAP VER]:\n{search_results}"
 
+                # 5. Özellik: Matematik ve Formül (LaTeX) Desteği Talimatı
+                latex_instruction = "\n\nMatematiksel ve fiziksel formülleri düzgün LaTeX ($...$ veya $$...$$) formatında yaz."
+
                 # Mesaj geçmişini hazırlama
-                formatted_messages = [{"role": "system", "content": system_prompt}]
+                formatted_messages = [{"role": "system", "content": system_prompt + latex_instruction}]
                 for m in st.session_state.messages[:-1]:
                     formatted_messages.append({"role": m["role"], "content": m["content"]})
                 
@@ -173,6 +211,7 @@ if prompt:
                         st.markdown(answer)
                         st.session_state.messages.append({"role": "assistant", "content": answer})
                         success = True
+                        st.rerun() # Sesli dinle ve kopyala butonlarının anında görünmesi için sayfayı tazeler
                         break
                     except Exception as e:
                         last_error = str(e)
