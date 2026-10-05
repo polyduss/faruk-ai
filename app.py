@@ -27,7 +27,7 @@ if "messages" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Faruk AI Ayarları")
     
-    # 2. Yapay Zeka Özelleştirmeleri
+    # Yapay Zeka Özelleştirmeleri
     system_prompt = st.text_area(
         "Sistem Talimatı (Kişilik)",
         value="Senin adın Faruk AI. Kullanıcılara her konuda yardımcı olan, samimi, zeki ve geniş bir genel kültüre sahip bir yapay zeka asistanısın. Sorulara detaylı ve Türkçe cevap ver.",
@@ -43,12 +43,12 @@ with st.sidebar:
         help="Düşük değerler mantıksal/kesin, yüksek değerler yaratıcı yanıtlar verir."
     )
     
-    # 3. Web Arama Modu
+    # Web Arama Modu
     enable_web_search = st.toggle("🌐 Web Arama Modu", value=False, help="Güncel haberler ve maç sonuçları için internette arama yapar.")
     
     st.divider()
     
-    # 1. Sohbet Yönetimi
+    # Sohbet Yönetimi
     st.subheader("💬 Sohbet Yönetimi")
     if st.button("🗑️ Sohbeti Temizle", use_container_width=True):
         st.session_state.messages = []
@@ -119,15 +119,16 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Faruk AI düşünüyor..."):
             try:
-                # Web Arama Entegrasyonu
+                # Web Arama Entegrasyonu (Güncellenmiş Güvenli Fonksiyon)
                 search_results = ""
                 if enable_web_search:
                     try:
-                        results = DDGS().text(prompt, max_results=3)
-                        if results:
-                            search_results = "\n".join([f"- {r['title']}: {r['body']}" for r in results])
+                        with DDGS() as ddgs:
+                            results = list(ddgs.text(prompt, max_results=3))
+                            if results:
+                                search_results = "\n".join([f"- {r.get('title', '')}: {r.get('body', '')}" for r in results])
                     except Exception as se:
-                        search_results = f"Arama yapılamadı: {se}"
+                        st.sidebar.warning(f"Arama modunda geçici sorun: {se}")
 
                 # Ekstra bağlamları birleştirme
                 extra_info = ""
@@ -141,7 +142,6 @@ if prompt:
                 for m in st.session_state.messages[:-1]:
                     formatted_messages.append({"role": m["role"], "content": m["content"]})
                 
-                # Son kullanıcı sorusuna dosya/web içeriğini ekleme
                 final_user_content = prompt + extra_info
                 formatted_messages.append({"role": "user", "content": final_user_content})
 
