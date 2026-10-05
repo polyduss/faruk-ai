@@ -3,14 +3,20 @@ from groq import Groq
 
 st.set_page_config(page_title="Faruk AI", page_icon="🤖")
 st.title("🤖 Faruk AI")
-st.caption("Otomatik Model Seçimli Işık Hızında Asistan")
+st.caption("Işık Hızında Yapay Zeka Asistanınız")
 
-api_key = st.sidebar.text_input("Groq API Key Giriniz (gsk_...):", type="password")
+# 1. API Key'i Streamlit Secrets'tan otomatik alıyoruz
+if "GROQ_API_KEY" in st.secrets:
+    api_key = st.secrets["GROQ_API_KEY"]
+else:
+    # Eğer Secrets tanımlı değilse yedek olarak sol menüden alır
+    api_key = st.sidebar.text_input("Groq API Key Giriniz:", type="password")
 
 if not api_key:
-    st.info("Lütfen devam etmek için sol menüden Groq API anahtarınızı girin.")
+    st.info("Sistemde aktif bir API anahtarı bulunamadı. Lütfen yöneticinizle iletişime geçin.")
     st.stop()
 
+# Groq istemcisi başlatılıyor
 client = Groq(api_key=api_key.strip())
 
 if "messages" not in st.session_state:
@@ -30,8 +36,6 @@ if prompt := st.chat_input("Faruk AI'ya bir şey sorun..."):
             try:
                 # Groq'taki aktif tüm modelleri canlı çeker
                 available_models = [m.id for m in client.models.list().data]
-                
-                # Sadece sohbet/llama destekli modelleri filtrele
                 usable_models = [m for m in available_models if "llama" in m or "qwen" in m]
                 
                 if not usable_models:
