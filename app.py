@@ -2,6 +2,7 @@ import streamlit as st
 from groq import Groq
 from duckduckgo_search import DDGS
 import pypdf
+import datetime
 
 st.set_page_config(page_title="Faruk AI", page_icon="🤖", layout="wide")
 st.title("🤖 Faruk AI")
@@ -27,7 +28,6 @@ if "messages" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Faruk AI Ayarları")
     
-    # Yapay Zeka Özelleştirmeleri
     system_prompt = st.text_area(
         "Sistem Talimatı (Kişilik)",
         value="Senin adın Faruk AI. Kullanıcılara her konuda yardımcı olan, samimi, zeki ve geniş bir genel kültüre sahip bir yapay zeka asistanısın. Sorulara detaylı ve Türkçe cevap ver.",
@@ -40,15 +40,13 @@ with st.sidebar:
         max_value=1.0,
         value=0.7,
         step=0.1,
-        help="Düşük değerler mantıksal/kesin, yüksek değerler yaratıcı yanıtlar verir."
+        help="Düşük değerler kesin, yüksek değerler yaratıcı yanıtlar verir."
     )
     
-    # Web Arama Modu
-    enable_web_search = st.toggle("🌐 Web Arama Modu", value=False, help="Güncel haberler ve maç sonuçları için internette arama yapar.")
+    enable_web_search = st.toggle("🌐 Web Arama Modu", value=False, help="Güncel haberler ve maç sonuçları için internette arama yapmayı sağlar.")
     
     st.divider()
     
-    # Sohbet Yönetimi
     st.subheader("💬 Sohbet Yönetimi")
     if st.button("🗑️ Sohbeti Temizle", use_container_width=True):
         st.session_state.messages = []
@@ -119,23 +117,26 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Faruk AI düşünüyor..."):
             try:
-                # Web Arama Entegrasyonu (Güncellenmiş Güvenli Fonksiyon)
+                # Web Arama Entegrasyonu (Nokta Atışı Güncel Arama)
                 search_results = ""
                 if enable_web_search:
                     try:
+                        current_year = datetime.datetime.now().year
+                        search_query = f"{prompt} {current_year} son dakika haber mac sonucu"
+                        
                         with DDGS() as ddgs:
-                            results = list(ddgs.text(prompt, max_results=3))
+                            results = list(ddgs.text(search_query, max_results=5))
                             if results:
                                 search_results = "\n".join([f"- {r.get('title', '')}: {r.get('body', '')}" for r in results])
                     except Exception as se:
-                        st.sidebar.warning(f"Arama modunda geçici sorun: {se}")
+                        st.sidebar.warning(f"Arama uyarısı: {se}")
 
                 # Ekstra bağlamları birleştirme
                 extra_info = ""
                 if 'file_context' in locals() and file_context:
                     extra_info += f"\n\n[YÜKLENEN DOSYA İÇERİĞİ]:\n{file_context}"
                 if search_results:
-                    extra_info += f"\n\n[GÜNCEL İNTERNET ARAMA SONUÇLARI]:\n{search_results}"
+                    extra_info += f"\n\n[DİKKAT: AŞAĞIDAKİ BİLGİLER CANLI İNTERNET ARAMASINDAN ÇEKİLMİŞ EN GÜNCEL VERİLERDİR. KENDİ DAHİLİ ESKİ BİLGİLERİN YERİNE BU BİLGİLERİ BAZ AL]:\n{search_results}"
 
                 # Mesaj geçmişini hazırlama
                 formatted_messages = [{"role": "system", "content": system_prompt}]
