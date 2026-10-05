@@ -1,24 +1,25 @@
 import streamlit as st
 from groq import Groq
-from duckduckgo_search import DDGS
+from tavily import TavilyClient
 import pypdf
-import datetime
 
 st.set_page_config(page_title="Faruk AI", page_icon="🤖", layout="wide")
 st.title("🤖 Faruk AI")
 st.caption("Işık Hızında Yapay Zeka Asistanınız")
 
-# 1. API Key kontrolü
+# 1. API Anahtarları Kontrolü
 if "GROQ_API_KEY" in st.secrets:
-    api_key = st.secrets["GROQ_API_KEY"]
+    groq_api_key = st.secrets["GROQ_API_KEY"]
 else:
-    api_key = st.sidebar.text_input("Groq API Key Giriniz:", type="password")
+    groq_api_key = st.sidebar.text_input("Groq API Key Giriniz:", type="password")
 
-if not api_key:
-    st.info("Sistemde aktif bir API anahtarı bulunamadı. Lütfen yöneticinizle iletişime geçin.")
+tavily_api_key = st.secrets.get("TAVILY_API_KEY", None)
+
+if not groq_api_key:
+    st.info("Sistemde aktif bir Groq API anahtarı bulunamadı. Lütfen yöneticinizle iletişime geçin.")
     st.stop()
 
-client = Groq(api_key=api_key.strip())
+client = Groq(api_key=groq_api_key.strip())
 
 # Session state başlatma
 if "messages" not in st.session_state:
@@ -43,7 +44,7 @@ with st.sidebar:
         help="Düşük değerler kesin, yüksek değerler yaratıcı yanıtlar verir."
     )
     
-    enable_web_search = st.toggle("🌐 Web Arama Modu", value=False, help="Güncel haberler ve maç sonuçları için internette arama yapmayı sağlar.")
+    enable_web_search = st.toggle("🌐 Web Arama Modu (Tavily AI)", value=False, help="Güncel haberler ve maç sonuçları için internette canlı arama yapar.")
     
     st.divider()
     
@@ -117,26 +118,31 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Faruk AI düşünüyor..."):
             try:
-                # Web Arama Entegrasyonu (Nokta Atışı Güncel Arama)
+                # Tavily Canlı Web Arama Entegrasyonu
                 search_results = ""
                 if enable_web_search:
-                    try:
-                        current_year = datetime.datetime.now().year
-                        search_query = f"{prompt} {current_year} son dakika haber mac sonucu"
-                        
-                        with DDGS() as ddgs:
-                            results = list(ddgs.text(search_query, max_results=5))
-                            if results:
-                                search_results = "\n".join([f"- {r.get('title', '')}: {r.get('body', '')}" for r in results])
-                    except Exception as se:
-                        st.sidebar.warning(f"Arama uyarısı: {se}")
+                    if tavily_api_key:
+                        try:
+                            tavily = TavilyClient(api_key=tavily_api_key)
+                            response = tavily.search(query=prompt, search_depth="basic", max_results=3)
+                            
+                            results_list = []
+                            for r in response.get("results", []):
+                                results_list.append(f"- {r.get('title')}: {r.get('content')}")
+                            
+                            if results_list:
+                                search_results = "\n".join(results_list)
+                        except Exception as te:
+                            st.sidebar.warning(f"Arama uyarısı: {te}")
+                    else:
+                        st.sidebar.error("Tavily API Key secrets kısmında bulunamadı!")
 
                 # Ekstra bağlamları birleştirme
                 extra_info = ""
                 if 'file_context' in locals() and file_context:
                     extra_info += f"\n\n[YÜKLENEN DOSYA İÇERİĞİ]:\n{file_context}"
                 if search_results:
-                    extra_info += f"\n\n[DİKKAT: AŞAĞIDAKİ BİLGİLER CANLI İNTERNET ARAMASINDAN ÇEKİLMİŞ EN GÜNCEL VERİLERDİR. KENDİ DAHİLİ ESKİ BİLGİLERİN YERİNE BU BİLGİLERİ BAZ AL]:\n{search_results}"
+                    extra_info += f"\n\n[DİKKAT: AŞAĞIDAKİ BİLGİLER TAVILY İLE İNTERNETTEN CANLI ÇEKİLMİŞ EN GÜNCEL VERİLERDİR. KENDİ ESKİ BİLGİLERİN YERİNE SADECE BURADAKİ BİLGİLERİ BAZ ALARAK CEVAP VER]:\n{search_results}"
 
                 # Mesaj geçmişini hazırlama
                 formatted_messages = [{"role": "system", "content": system_prompt}]
