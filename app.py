@@ -32,31 +32,20 @@ if prompt := st.chat_input("Faruk AI'ya bir şey sorun..."):
     with st.chat_message("assistant"):
         with st.spinner("Faruk AI düşünüyor..."):
             try:
-                # Groq'un en güncel ve kararlı çalışan ana sohbet modelleri
-                preferred_models = [
-                    "llama-3.3-70b-versatile",
-                    "llama3-8b-8192",
-                    "llama3-70b-8192",
-                    "mixtral-8x7b-32768"
+                # Groq'taki tüm canlı modelleri çekiyoruz
+                all_models = [m.id for m in client.models.list().data]
+                
+                # Sadece geçerli metin/sohbet modellerini tutuyoruz (guard, whisper, vision vb. elenir)
+                candidate_models = [
+                    m for m in all_models 
+                    if not any(bad in m.lower() for bad in ["guard", "whisper", "vision", "prompt", "classifier", "specdec"])
                 ]
-
-                # Canlı modeller arasından da sohbet için uygun olanları ek yedek olarak alıyoruz
-                try:
-                    all_fetched = [m.id for m in client.models.list().data]
-                    extra_models = [
-                        m for m in all_fetched 
-                        if "llama" in m and not any(bad in m for bad in ["guard", "prompt", "classifier", "specdec", "whisper", "vision"])
-                    ]
-                except Exception:
-                    extra_models = []
-
-                # Öncelikli modeller ilk sırada denenir
-                models_to_try = preferred_models + [m for m in extra_models if m not in preferred_models]
 
                 success = False
                 last_error = ""
 
-                for model_name in models_to_try:
+                # Bulunan aday modeller sırayla denenir, ilk çalışan yanıtı üretir
+                for model_name in candidate_models:
                     try:
                         chat_completion = client.chat.completions.create(
                             messages=[
@@ -74,11 +63,12 @@ if prompt := st.chat_input("Faruk AI'ya bir şey sorun..."):
                         success = True
                         break
                     except Exception as e:
+                        # Emekliye ayrılmış (decommissioned) veya erişim olmayan modeli pas geç ve sıradakini dene
                         last_error = str(e)
                         continue
 
                 if not success:
-                    st.error(f"Aktif sohbet modeli bulunamadı: {last_error}")
+                    st.error(f"Yanıt üretilemedi. Son hata: {last_error}")
 
             except Exception as main_e:
                 st.error(f"Hata oluştu: {main_e}")
