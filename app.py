@@ -5,7 +5,7 @@ st.set_page_config(page_title="Faruk AI", page_icon="🤖")
 st.title("🤖 Faruk AI")
 st.caption("Işık Hızında Yapay Zeka Asistanınız")
 
-# 1. API Key'i Streamlit Secrets'tan otomatik alıyoruz
+# 1. API Key'i Streamlit Secrets'tan alıyoruz
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
@@ -32,19 +32,26 @@ if prompt := st.chat_input("Faruk AI'ya bir şey sorun..."):
     with st.chat_message("assistant"):
         with st.spinner("Faruk AI düşünüyor..."):
             try:
-                # Groq'taki aktif modelleri çekip sadece geçerli sohbet modellerini filtreliyoruz
-                all_models = [m.id for m in client.models.list().data]
-                
-                # Sınıflandırma, guard, ses ve taslak modellerini ele, sadece ana sohbet modellerini tut
-                chat_models = [
-                    m for m in all_models 
-                    if ("llama-3" in m or "qwen" in m) 
-                    and not any(bad in m for bad in ["guard", "prompt", "classifier", "specdec", "whisper"])
+                # Groq'un en güncel ve kararlı çalışan ana sohbet modelleri
+                preferred_models = [
+                    "llama-3.3-70b-versatile",
+                    "llama3-8b-8192",
+                    "llama3-70b-8192",
+                    "mixtral-8x7b-32768"
                 ]
-                
-                # Yedek liste: Öncelikli çalışmasını istediğimiz resmi sohbet modelleri
-                fallback_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
-                models_to_try = chat_models + [m for m in fallback_models if m not in chat_models]
+
+                # Canlı modeller arasından da sohbet için uygun olanları ek yedek olarak alıyoruz
+                try:
+                    all_fetched = [m.id for m in client.models.list().data]
+                    extra_models = [
+                        m for m in all_fetched 
+                        if "llama" in m and not any(bad in m for bad in ["guard", "prompt", "classifier", "specdec", "whisper", "vision"])
+                    ]
+                except Exception:
+                    extra_models = []
+
+                # Öncelikli modeller ilk sırada denenir
+                models_to_try = preferred_models + [m for m in extra_models if m not in preferred_models]
 
                 success = False
                 last_error = ""
